@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Assistant Chat</title>
+    <style>
+        #chat-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        #message-container {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+        .message {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .user-message {
+            background-color: #e3f2fd;
+            margin-left: 20%;
+        }
+        .assistant-message {
+            background-color: #f5f5f5;
+            margin-right: 20%;
+        }
+    </style>
+</head>
+<body>
+    <div id="chat-container">
+        <div id="message-container"></div>
+        <div id="input-container">
+            <textarea id="message-input" rows="3" style="width: 100%"></textarea>
+            <button onclick="sendMessage()">Send</button>
+            <button onclick="startRecording()">Start Recording</button>
+            <button onclick="stopRecording()" disabled>Stop Recording</button>
+        </div>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+
+        async function sendMessage() {
+            const input = document.getElementById('message-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            addMessage('user', message);
+            input.value = '';
+
+            try {
+                const response = await fetch('/message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message }),
+                });
+                const data = await response.json();
+                addMessage('assistant', data.content, data.audio);
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        function addMessage(role, content, audioData = null) {
+            const container = document.getElementById('message-container');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}-message`;
+            
+            // Add text content
+            const textDiv = document.createElement('div');
+            textDiv.textContent = content;
+            messageDiv.appendChild(textDiv);
+            
+            // Add audio player if audio data is available
+            if (audioData) {
+                const audioDiv = document.createElement('div');
+                audioDiv.style.marginTop = '10px';
+                
+                const audio = document.createElement('audio');
+                audio.controls = true;
+                const source = document.createElement('source');
+                source.src = `data:audio/mp3;base64,${audioData}`;
+                source.type = 'audio/mp3';
+                
+                audio.appendChild(source);
+                audioDiv.appendChild(audio);
+                messageDiv.appendChild(audioDiv);
+                
+                // Auto-play the audio
+                audio.play().catch(e => console.log('Auto-play prevented:', e));
+            }
+            
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function getSupportedMimeType() {
+            const types = [
+                'audio/webm;codecs=opus',
+                'audio/webm',
+                'audio/ogg;codecs=opus',
+                'audio/mp4'
+            ];
+            for (const type of types) {
+                if (MediaRecorder.isTypeSupported(type)) {
+                    return type;
+                }
+            }
+            throw new Error('No supported audio MIME types found');
+        }
+
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        channelCount: 1,
+                        sampleRate: 44100
+                    }
+                });
+                
+                const mimeType = getSupportedMimeType();
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: mimeType
+                });
+                audioChunks = [];
+
+                mediaRecorder.addEventListener('dataavailable', event => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                });
+
+                mediaRecorder.addEventListener('stop', async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    const formData = new FormData();
+                    formData.append('audio', audioBlob, 'recording.webm');
+
+                    try {
+                        const response = await fetch('/audio', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        
+                        const data = await response.json();
+                        if (data.error) {
+                            console.error('Server error:', data.error);
+                            addMessage('assistant', 'Sorry, there was an error processing your audio.');
+                        } else {
+                            addMessage('assistant', data.content, data.audio);
+                        }
+                    } catch (error) {
+                        console.error('Error sending audio:', error);
+                        addMessage('assistant', 'Sorry, there was an error sending your audio.');
+                    }
+                });
+
+                mediaRecorder.start();
+                document.querySelector('button[onclick="startRecording()"]').disabled = true;
+                document.querySelector('button[onclick="stopRecording()"]').disabled = false;
+            } catch (error) {
+                console.error('Error starting recording:', error);
+                alert('Error starting recording. Please check your microphone permissions and browser compatibility.');
+            }
+        }
+
+        function stopRecording() {
+            mediaRecorder.stop();
+            document.querySelector('button[onclick="startRecording()"]').disabled = false;
+            document.querySelector('button[onclick="stopRecording()"]').disabled = true;
+        }
+    </script>
+</body>
+</html> 
