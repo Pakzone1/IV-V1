@@ -1,49 +1,303 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>AI Assistant Chat</title>
+    <title>AI Interview Assistant</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background: #f5f7fb;
+            color: #333;
+            line-height: 1.6;
+        }
+
         #chat-container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
+            max-width: 1000px;
+            margin: 20px auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            overflow: hidden;
         }
+
+        .header {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-info {
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .logout-btn {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .logout-btn:hover {
+            background: rgba(255,255,255,0.3);
+            transform: translateY(-1px);
+        }
+
         #message-container {
-            height: 400px;
+            height: 420px;
             overflow-y: auto;
-            border: 1px solid #ccc;
-            padding: 10px;
-            margin-bottom: 20px;
+            padding: 20px;
+            background: #ffffff;
         }
+
         .message {
-            margin: 10px 0;
-            padding: 10px;
-            border-radius: 5px;
+            margin: 15px 0;
+            padding: 15px;
+            border-radius: 12px;
+            max-width: 80%;
+            position: relative;
+            animation: fadeIn 0.3s ease;
         }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
         .user-message {
-            background-color: #e3f2fd;
-            margin-left: 20%;
+            background: #f0f7ff;
+            margin-left: auto;
+            color: #1a365d;
+            border-left: 4px solid #3b82f6;
         }
+
         .assistant-message {
-            background-color: #f5f5f5;
-            margin-right: 20%;
+            background: #f8f9fa;
+            margin-right: auto;
+            color: #1f2937;
+            border-left: 4px solid #10b981;
+        }
+
+        #input-container {
+            padding: 20px;
+            background: #ffffff;
+            border-top: 1px solid #edf2f7;
+        }
+
+        #message-input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            font-size: 15px;
+            resize: none;
+            transition: border-color 0.3s ease;
+        }
+
+        #message-input:focus {
+            outline: none;
+            border-color: #6366f1;
+        }
+
+        .button-container {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .send-btn {
+            background: #6366f1;
+            color: white;
+        }
+
+        .send-btn:hover {
+            background: #4f46e5;
+            transform: translateY(-1px);
+        }
+
+        .record-btn {
+            background: #10b981;
+            color: white;
+        }
+
+        .record-btn.recording {
+            background: #ef4444;
+        }
+
+        .record-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .audio-player {
+            margin-top: 10px;
+            width: 100%;
+            height: 40px;
+            border-radius: 20px;
+        }
+
+        /* Custom scrollbar */
+        #message-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #message-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        #message-container::-webkit-scrollbar-thumb {
+            background: #c5c5c5;
+            border-radius: 4px;
+        }
+
+        #message-container::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+
+        .mic-icon {
+            font-size: 16px;
+        }
+
+        .recording-pulse {
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
         }
     </style>
 </head>
 <body>
     <div id="chat-container">
+        <div class="header">
+            <div class="user-info">
+                <i class="fas fa-user-circle"></i> {{ email }}
+            </div>
+            <a href="{{ url_for('main.logout') }}" class="logout-btn">
+                <i class="fas fa-sign-out-alt"></i> End Interview
+            </a>
+        </div>
         <div id="message-container"></div>
         <div id="input-container">
-            <textarea id="message-input" rows="3" style="width: 100%"></textarea>
-            <button onclick="sendMessage()">Send</button>
-            <button onclick="startRecording()">Start Recording</button>
-            <button onclick="stopRecording()" disabled>Stop Recording</button>
+            <textarea id="message-input" rows="3" placeholder="Type your message here..."></textarea>
+            <div class="button-container">
+                <button class="send-btn" onclick="sendMessage()">
+                    <i class="fas fa-paper-plane"></i> Send
+                </button>
+                <button class="record-btn" id="recordButton" onclick="toggleRecording()">
+                    <i class="fas fa-microphone mic-icon"></i> 
+                    <span id="recordButtonText">Start Recording</span>
+                </button>
+            </div>
         </div>
     </div>
 
     <script>
         let mediaRecorder;
         let audioChunks = [];
+        let isRecording = false;
+
+        async function toggleRecording() {
+            const button = document.getElementById('recordButton');
+            const buttonText = document.getElementById('recordButtonText');
+            const micIcon = button.querySelector('.mic-icon');
+
+            if (!isRecording) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: {
+                            channelCount: 1,
+                            sampleRate: 44100
+                        }
+                    });
+                    
+                    const mimeType = getSupportedMimeType();
+                    mediaRecorder = new MediaRecorder(stream, {
+                        mimeType: mimeType
+                    });
+                    audioChunks = [];
+
+                    mediaRecorder.addEventListener('dataavailable', event => {
+                        if (event.data.size > 0) {
+                            audioChunks.push(event.data);
+                        }
+                    });
+
+                    mediaRecorder.addEventListener('stop', async () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        const formData = new FormData();
+                        formData.append('audio', audioBlob, 'recording.webm');
+
+                        try {
+                            const response = await fetch('/audio', {
+                                method: 'POST',
+                                body: formData
+                            });
+                            
+                            if (!response.ok) {
+                                throw new Error(`HTTP error! status: ${response.status}`);
+                            }
+                            
+                            const data = await response.json();
+                            if (data.error) {
+                                console.error('Server error:', data.error);
+                                addMessage('assistant', 'Sorry, there was an error processing your audio.');
+                            } else {
+                                addMessage('user', `🎤 ${data.transcription}`);
+                                addMessage('assistant', data.content, data.audio);
+                            }
+                        } catch (error) {
+                            console.error('Error sending audio:', error);
+                            addMessage('assistant', 'Sorry, there was an error sending your audio.');
+                        }
+                    });
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    button.classList.add('recording');
+                    micIcon.classList.add('recording-pulse');
+                    buttonText.textContent = 'Stop Recording';
+                } catch (error) {
+                    console.error('Error starting recording:', error);
+                    alert('Error starting recording. Please check your microphone permissions and browser compatibility.');
+                }
+            } else {
+                mediaRecorder.stop();
+                isRecording = false;
+                button.classList.remove('recording');
+                micIcon.classList.remove('recording-pulse');
+                buttonText.textContent = 'Start Recording';
+            }
+        }
 
         async function sendMessage() {
             const input = document.getElementById('message-input');
@@ -114,70 +368,6 @@
                 }
             }
             throw new Error('No supported audio MIME types found');
-        }
-
-        async function startRecording() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: {
-                        channelCount: 1,
-                        sampleRate: 44100
-                    }
-                });
-                
-                const mimeType = getSupportedMimeType();
-                mediaRecorder = new MediaRecorder(stream, {
-                    mimeType: mimeType
-                });
-                audioChunks = [];
-
-                mediaRecorder.addEventListener('dataavailable', event => {
-                    if (event.data.size > 0) {
-                        audioChunks.push(event.data);
-                    }
-                });
-
-                mediaRecorder.addEventListener('stop', async () => {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                    const formData = new FormData();
-                    formData.append('audio', audioBlob, 'recording.webm');
-
-                    try {
-                        const response = await fetch('/audio', {
-                            method: 'POST',
-                            body: formData
-                        });
-                        
-                        if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`);
-                        }
-                        
-                        const data = await response.json();
-                        if (data.error) {
-                            console.error('Server error:', data.error);
-                            addMessage('assistant', 'Sorry, there was an error processing your audio.');
-                        } else {
-                            addMessage('assistant', data.content, data.audio);
-                        }
-                    } catch (error) {
-                        console.error('Error sending audio:', error);
-                        addMessage('assistant', 'Sorry, there was an error sending your audio.');
-                    }
-                });
-
-                mediaRecorder.start();
-                document.querySelector('button[onclick="startRecording()"]').disabled = true;
-                document.querySelector('button[onclick="stopRecording()"]').disabled = false;
-            } catch (error) {
-                console.error('Error starting recording:', error);
-                alert('Error starting recording. Please check your microphone permissions and browser compatibility.');
-            }
-        }
-
-        function stopRecording() {
-            mediaRecorder.stop();
-            document.querySelector('button[onclick="startRecording()"]').disabled = false;
-            document.querySelector('button[onclick="stopRecording()"]').disabled = true;
         }
     </script>
 </body>
