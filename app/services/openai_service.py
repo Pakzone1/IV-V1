@@ -104,3 +104,33 @@ class OpenAIService:
         except Exception as e:
             print(f"Error processing audio: {str(e)}")
             raise 
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+            # To push changes to main instead of master in GitHub:
+            # 1. First check which branch you're on:
+            #    git branch
+            #
+            # 2. If you need to rename master to main:
+            #    git branch -M main
+            #
+            # 3. Add and commit your changes:
+            #    git add .
+            #    git commit -m "your commit message"
+            #
+            # 4. Push to main branch:
+            #    git push -u origin main
+            #
+            # Note: If repository was already using master, you may need to:
+            # - Update default branch to main in GitHub repository settings
+            # - Delete old master branch: git push origin --delete master
+
