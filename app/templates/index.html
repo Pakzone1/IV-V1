@@ -155,6 +155,20 @@
             transform: translateY(-1px);
         }
 
+        .live-btn {
+            background: #8b5cf6;
+            color: white;
+        }
+
+        .live-btn.recording {
+            background: #7c3aed;
+            animation: pulse 1.5s infinite;
+        }
+
+        .live-btn:hover {
+            background: #6d28d9;
+        }
+
         .audio-player {
             margin-top: 10px;
             width: 100%;
@@ -189,6 +203,68 @@
             animation: pulse 1.5s infinite;
         }
 
+        .score-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        .score-modal-content {
+            position: relative;
+            background: white;
+            margin: 50px auto;
+            padding: 30px;
+            width: 80%;
+            max-width: 800px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .score-section {
+            margin: 20px 0;
+        }
+
+        .score-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+
+        .score-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4f46e5;
+        }
+
+        .feedback-section {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f0f7ff;
+            border-radius: 8px;
+        }
+
+        .improvements-list {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        .improvements-list li {
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 6px;
+            border-left: 4px solid #10b981;
+        }
+
         @keyframes pulse {
             0% { opacity: 1; }
             50% { opacity: 0.5; }
@@ -202,7 +278,7 @@
             <div class="user-info">
                 <i class="fas fa-user-circle"></i> {{ email }}
             </div>
-            <a href="{{ url_for('main.logout') }}" class="logout-btn">
+            <a href="{{ url_for('main.logout') }}" class="logout-btn" onclick="handleLogout(event)">
                 <i class="fas fa-sign-out-alt"></i> End Interview
             </a>
         </div>
@@ -217,6 +293,29 @@
                     <i class="fas fa-microphone mic-icon"></i> 
                     <span id="recordButtonText">Start Recording</span>
                 </button>
+                <button class="record-btn live-btn" id="liveButton" onclick="toggleLiveListening()">
+                    <i class="fas fa-broadcast-tower mic-icon"></i> 
+                    <span id="liveButtonText">Live Listen</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Score Modal -->
+    <div id="scoreModal" class="score-modal">
+        <div class="score-modal-content">
+            <h2>Interview Evaluation</h2>
+            <div class="score-section">
+                <h3>Scores</h3>
+                <div id="scoreContainer"></div>
+            </div>
+            <div class="feedback-section">
+                <h3>Detailed Feedback</h3>
+                <div id="feedbackContainer"></div>
+            </div>
+            <div class="feedback-section">
+                <h3>Suggestions for Improvement</h3>
+                <ul id="improvementsList" class="improvements-list"></ul>
             </div>
         </div>
     </div>
@@ -225,6 +324,147 @@
         let mediaRecorder;
         let audioChunks = [];
         let isRecording = false;
+        let isLiveListening = false;
+        let silenceTimeout;
+        let audioContext;
+        let analyser;
+        let microphone;
+        let isVoiceDetected = false;
+        let liveAudioChunks = [];
+
+        // Function to detect voice activity
+        function detectVoice(analyser) {
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            analyser.getByteFrequencyData(dataArray);
+
+            // Calculate average frequency
+            const average = dataArray.reduce((a, b) => a + b) / bufferLength;
+            console.log('Voice detection - Average frequency:', average);
+            return average > 30; // Adjust threshold as needed
+        }
+
+        async function toggleLiveListening() {
+            console.log('toggleLiveListening called, current state:', isLiveListening);
+            const button = document.getElementById('liveButton');
+            const buttonText = document.getElementById('liveButtonText');
+            const icon = button.querySelector('.mic-icon');
+
+            if (!isLiveListening) {
+                console.log('Starting live listening mode...');
+                try {
+                    console.log('Requesting microphone access...');
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: {
+                            channelCount: 1,
+                            sampleRate: 44100
+                        }
+                    });
+                    console.log('Microphone access granted');
+
+                    // Set up audio context and analyser
+                    console.log('Setting up audio context and analyser...');
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    analyser = audioContext.createAnalyser();
+                    microphone = audioContext.createMediaStreamSource(stream);
+                    microphone.connect(analyser);
+                    console.log('Audio context setup complete');
+
+                    const mimeType = getSupportedMimeType();
+                    console.log('Using MIME type:', mimeType);
+                    mediaRecorder = new MediaRecorder(stream, {
+                        mimeType: mimeType
+                    });
+
+                    // Start monitoring audio
+                    button.classList.add('recording');
+                    buttonText.textContent = 'Listening...';
+                    icon.classList.add('recording-pulse');
+                    isLiveListening = true;
+                    liveAudioChunks = [];
+                    console.log('Live listening mode activated');
+                    
+                    let silenceStart = null;
+                    let isRecordingVoice = false;
+
+                    // Monitor voice activity
+                    console.log('Starting voice activity monitoring...');
+                    const checkAudio = setInterval(() => {
+                        const hasVoice = detectVoice(analyser);
+                        console.log('Voice detection status:', hasVoice, 'Currently recording:', isRecordingVoice);
+
+                        if (hasVoice && !isRecordingVoice) {
+                            console.log('Voice detected, starting recording');
+                            isRecordingVoice = true;
+                            mediaRecorder.start();
+                            silenceStart = null;
+                        } else if (!hasVoice && isRecordingVoice) {
+                            if (!silenceStart) {
+                                console.log('Silence detected, starting silence timer');
+                                silenceStart = Date.now();
+                            } else {
+                                const silenceDuration = Date.now() - silenceStart;
+                                console.log('Silence duration:', silenceDuration);
+                                if (silenceDuration > 1500) {
+                                    console.log('Silence threshold reached, stopping recording');
+                                    mediaRecorder.stop();
+                                    isRecordingVoice = false;
+                                    silenceStart = null;
+                                }
+                            }
+                        }
+                    }, 100);
+
+                    mediaRecorder.addEventListener('dataavailable', event => {
+                        console.log('Data available event, chunk size:', event.data.size);
+                        if (event.data.size > 0) {
+                            liveAudioChunks.push(event.data);
+                        }
+                    });
+
+                    mediaRecorder.addEventListener('stop', async () => {
+                        console.log('MediaRecorder stopped, processing audio chunks...');
+                        if (liveAudioChunks.length > 0) {
+                            console.log('Creating audio blob from', liveAudioChunks.length, 'chunks');
+                            const audioBlob = new Blob(liveAudioChunks, { type: getSupportedMimeType() });
+                            console.log('Audio blob created, size:', audioBlob.size);
+                            await sendAudioToServer(audioBlob);
+                            liveAudioChunks = [];
+                        }
+                    });
+
+                    button.onclick = () => {
+                        console.log('Stopping live listening mode...');
+                        clearInterval(checkAudio);
+                        stream.getTracks().forEach(track => {
+                            console.log('Stopping audio track:', track.kind);
+                            track.stop();
+                        });
+                        button.classList.remove('recording');
+                        buttonText.textContent = 'Live Listen';
+                        icon.classList.remove('recording-pulse');
+                        isLiveListening = false;
+                        if (audioContext) {
+                            console.log('Closing audio context');
+                            audioContext.close();
+                        }
+                        button.onclick = toggleLiveListening;
+                        console.log('Live listening mode deactivated');
+                    };
+
+                } catch (err) {
+                    console.error('Error in live listening mode:', err);
+                    alert('Error accessing microphone. Please ensure you have granted microphone permissions.');
+                }
+            } else {
+                console.log('Stopping live listening mode...');
+                button.classList.remove('recording');
+                buttonText.textContent = 'Live Listen';
+                icon.classList.remove('recording-pulse');
+                isLiveListening = false;
+                console.log('Live listening mode deactivated');
+            }
+        }
 
         async function toggleRecording() {
             const button = document.getElementById('recordButton');
@@ -368,6 +608,111 @@
                 }
             }
             throw new Error('No supported audio MIME types found');
+        }
+
+        async function sendAudioToServer(audioBlob) {
+            console.log('Sending audio to server, blob size:', audioBlob.size);
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'recording.webm');
+
+            try {
+                console.log('Making POST request to /audio endpoint...');
+                const response = await fetch('/audio', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                console.log('Server response received');
+                const data = await response.json();
+                if (data.error) {
+                    console.error('Server error:', data.error);
+                    addMessage('assistant', 'Sorry, there was an error processing your audio.');
+                } else {
+                    console.log('Audio processed successfully');
+                    console.log('Transcription:', data.transcription);
+                    addMessage('user', `🎤 ${data.transcription}`);
+                    addMessage('assistant', data.content, data.audio);
+                }
+            } catch (error) {
+                console.error('Error sending audio to server:', error);
+                addMessage('assistant', 'Sorry, there was an error sending your audio.');
+            }
+        }
+
+        async function handleLogout(event) {
+            event.preventDefault();
+            
+            try {
+                // Wait for a moment to allow any pending messages to be saved
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Fetch the interview score
+                const response = await fetch('/get-score');
+                const data = await response.json();
+                
+                if (!data.error) {
+                    showScore(data);
+                } else {
+                    console.error('Error getting score:', data.error);
+                    window.location.href = event.target.href;
+                }
+            } catch (error) {
+                console.error('Error during logout:', error);
+                window.location.href = event.target.href;
+            }
+        }
+
+        function showScore(data) {
+            const modal = document.getElementById('scoreModal');
+            const scoreContainer = document.getElementById('scoreContainer');
+            const feedbackContainer = document.getElementById('feedbackContainer');
+            const improvementsList = document.getElementById('improvementsList');
+            
+            // Display scores
+            scoreContainer.innerHTML = '';
+            Object.entries(data.score).forEach(([category, score]) => {
+                const scoreItem = document.createElement('div');
+                scoreItem.className = 'score-item';
+                scoreItem.innerHTML = `
+                    <div>${category.replace('_', ' ').toUpperCase()}</div>
+                    <div class="score-value">${score}/10</div>
+                `;
+                scoreContainer.appendChild(scoreItem);
+            });
+            
+            // Display detailed feedback
+            feedbackContainer.innerHTML = '';
+            Object.entries(data.feedback.detailed_feedback).forEach(([category, feedback]) => {
+                const feedbackItem = document.createElement('div');
+                feedbackItem.className = 'score-item';
+                feedbackItem.innerHTML = `
+                    <strong>${category.replace('_', ' ').toUpperCase()}:</strong>
+                    <p>${feedback}</p>
+                `;
+                feedbackContainer.appendChild(feedbackItem);
+            });
+            
+            // Display improvement suggestions
+            improvementsList.innerHTML = '';
+            data.feedback.improvements.forEach(suggestion => {
+                const li = document.createElement('li');
+                li.textContent = suggestion;
+                improvementsList.appendChild(li);
+            });
+            
+            // Show modal
+            modal.style.display = 'block';
+            
+            // Add click handler to close modal and proceed with logout
+            modal.onclick = (event) => {
+                if (event.target === modal) {
+                    window.location.href = '/logout';
+                }
+            };
         }
     </script>
 </body>
